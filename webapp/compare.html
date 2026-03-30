@@ -358,14 +358,39 @@
             const currentNodesMap = new Map(current.nodes.map(n => [n.id, n]));
             const beforeNodesMap = new Map(before.nodes.map(n => [n.id, n]));
 
+            // Build vote account -> node map for current dataset
+            const currentVoteMap = new Map();
+            current.nodes.forEach(n => {
+                const vote = n.info?.vote_account_pubkey;
+                if (vote) currentVoteMap.set(vote, n);
+            });
+
             // Find added nodes
             const nodesAdded = current.nodes.filter(n => !beforeNodesMap.has(n.id));
 
-            // Find removed nodes
-            const nodesRemoved = before.nodes.filter(n => !currentNodesMap.has(n.id));
-
-            // Find changed nodes
+            // Find removed nodes vs nodes that changed identity but kept same vote account
+            const nodesRemoved = [];
             const nodesChanged = [];
+
+            before.nodes.forEach(beforeNode => {
+                if (currentNodesMap.has(beforeNode.id)) return; // still exists by ID, handle below
+
+                const vote = beforeNode.info?.vote_account_pubkey;
+                const matchByVote = vote ? currentVoteMap.get(vote) : null;
+
+                if (matchByVote) {
+                    // Same vote account exists under a different identity — treat as changed
+                    const changes = [
+                        { field: 'identity', before: beforeNode.id, current: matchByVote.id }
+                    ];
+                    changes.push(...getNodeChanges(matchByVote, beforeNode));
+                    nodesChanged.push({ node: matchByVote, beforeNode, changes });
+                } else {
+                    nodesRemoved.push(beforeNode);
+                }
+            });
+
+            // Find changed nodes (same ID)
             current.nodes.forEach(currentNode => {
                 const beforeNode = beforeNodesMap.get(currentNode.id);
                 if (beforeNode) {
