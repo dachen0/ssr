@@ -213,7 +213,27 @@
 <body>
     <div class="header">
         <h1>Dataset Comparison Tool</h1>
-        <p>Comparing sybil_analysis_output.json (Current) vs sybil_analysis_output_before.json (Before)</p>
+        <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
+            <label style="font-size: 14px; color: #6b7280;">
+                Dataset A:
+                <select id="dataset-a" style="padding: 6px 10px; border: 1px solid #d2d6dc; border-radius: 6px; font-size: 13px; background: #fff; cursor: pointer; margin-left: 4px;">
+                    <option value="sybil_analysis_output_3_30_26.json">Current Data</option>
+                    <option value="sybil_analysis_output.json">Data 1-21-26</option>
+                    <option value="sybil_analysis_output_before.json">Data 12-12-25</option>
+                </select>
+            </label>
+            <span style="font-size: 14px; color: #6b7280;">vs</span>
+            <label style="font-size: 14px; color: #6b7280;">
+                Dataset B:
+                <select id="dataset-b" style="padding: 6px 10px; border: 1px solid #d2d6dc; border-radius: 6px; font-size: 13px; background: #fff; cursor: pointer; margin-left: 4px;">
+                    <option value="sybil_analysis_output.json">Data 1-21-26</option>
+                    <option value="sybil_analysis_output_3_30_26.json">Current Data</option>
+                    <option value="sybil_analysis_output_before.json">Data 12-12-25</option>
+                </select>
+            </label>
+            <button id="compare-btn" style="padding: 8px 20px; background: #111827; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Compare</button>
+        </div>
+        <p id="compare-description" style="margin: 10px 0 0 0; color: #6b7280; font-size: 14px;">Comparing Current Data vs Data 1-21-26</p>
     </div>
 
     <div id="loading" class="loading">Loading datasets...</div>
@@ -301,19 +321,25 @@
             edgesRemoved: []
         };
 
-        async function loadDatasets() {
+        const datasetLabels = {
+            'sybil_analysis_output_3_30_26.json': 'Current Data',
+            'sybil_analysis_output.json': 'Data 1-21-26',
+            'sybil_analysis_output_before.json': 'Data 12-12-25'
+        };
+
+        async function loadDatasets(datasetAFile, datasetBFile) {
             try {
-                const [currentResponse, beforeResponse] = await Promise.all([
-                    fetch('sybil_analysis_output.json'),
-                    fetch('sybil_analysis_output_before.json')
+                const [aResponse, bResponse] = await Promise.all([
+                    fetch(datasetAFile),
+                    fetch(datasetBFile)
                 ]);
 
-                if (!currentResponse.ok || !beforeResponse.ok) {
+                if (!aResponse.ok || !bResponse.ok) {
                     throw new Error('Failed to load one or both datasets');
                 }
 
-                const current = await currentResponse.json();
-                const before = await beforeResponse.json();
+                const current = await aResponse.json();
+                const before = await bResponse.json();
 
                 return { current, before };
             } catch (error) {
@@ -614,12 +640,30 @@
             });
         });
 
-        // Initialize
-        (async function() {
+        async function runComparison() {
+            const datasetAFile = document.getElementById('dataset-a').value;
+            const datasetBFile = document.getElementById('dataset-b').value;
+
+            if (datasetAFile === datasetBFile) {
+                showError('Please select two different datasets to compare.');
+                document.getElementById('content').style.display = 'none';
+                return;
+            }
+
+            // Update description
+            const labelA = datasetLabels[datasetAFile] || datasetAFile;
+            const labelB = datasetLabels[datasetBFile] || datasetBFile;
+            document.getElementById('compare-description').textContent = `Comparing ${labelA} vs ${labelB}`;
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+
             try {
-                const { current, before } = await loadDatasets();
+                const { current, before } = await loadDatasets(datasetAFile, datasetBFile);
                 const comparison = compareDatasets(current, before);
-                
+
                 comparisonData = comparison;
 
                 // Update summary
@@ -645,13 +689,22 @@
                 setupSearch('search-edges-added', 'list-edges-added', comparison.edgesAdded, edge => renderEdgeItem(edge, comparison.currentNodesMap, 'added'));
                 setupSearch('search-edges-removed', 'list-edges-removed', comparison.edgesRemoved, edge => renderEdgeItem(edge, comparison.beforeNodesMap, 'removed'));
 
+                // Clear search inputs
+                document.querySelectorAll('.search-box').forEach(input => input.value = '');
+
                 // Show content
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('content').style.display = 'block';
             } catch (error) {
                 console.error('Failed to initialize comparison tool:', error);
             }
-        })();
+        }
+
+        // Compare button handler
+        document.getElementById('compare-btn').addEventListener('click', runComparison);
+
+        // Initialize with default selections
+        runComparison();
     </script>
 </body>
 </html>
